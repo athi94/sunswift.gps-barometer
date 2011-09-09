@@ -1,0 +1,5 @@
+Record=SheetSymbol|SourceDocument=3V3-CAN-UNISOLATED.SchDoc|Designator=U_3V-Switcher-50mA|SchDesignator=U_3V-Switcher-50mA|FileName=3V-switcher-50mA.SchDoc|SymbolType=Normal|RawFileName=3V-switcher-50mA.SchDoc|DesignItemId= |SourceLibraryName= |ObjectKind=Sheet Symbol|RevisionGUID= |ItemGUID= |VaultGUID= 
+Record=SheetSymbol|SourceDocument=TopLevel.SchDoc|Designator=GPSBarometer|SchDesignator=GPSBarometer|FileName=GPSBarometer.SchDoc|SymbolType=Normal|RawFileName=GPSBarometer.SchDoc|DesignItemId= |SourceLibraryName= |ObjectKind=Sheet Symbol|RevisionGUID= |ItemGUID= |VaultGUID= 
+Record=SheetSymbol|SourceDocument=TopLevel.SchDoc|Designator=LPC|SchDesignator=LPC|FileName=LPC_Rep.SchDoc|SymbolType=Normal|RawFileName=LPC_Rep.SchDoc|DesignItemId= |SourceLibraryName= |ObjectKind=Sheet Symbol|RevisionGUID= |ItemGUID= |VaultGUID= 
+Record=SheetSymbol|SourceDocument=TopLevel.SchDoc|Designator=PWR|SchDesignator=PWR|FileName=3V3-CAN-UNISOLATED.SchDoc|SymbolType=Normal|RawFileName=3V3-CAN-UNISOLATED.SchDoc|DesignItemId= |SourceLibraryName= |ObjectKind=Sheet Symbol|RevisionGUID= |ItemGUID= |VaultGUID= 
+Record=TopLevelDocument|FileName=TopLevel.SchDoc
