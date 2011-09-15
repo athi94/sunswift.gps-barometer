@@ -50,6 +50,11 @@
  * along with the project.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+/* We have two types of GPS modules. Their default baud rates are
+ * different, so we have to separate them unfortunately. */
+#undef  LOCOSYS
+#define SANJOSE
+
 #include <scandal/engine.h>
 #include <scandal/message.h>
 #include <scandal/leds.h>
@@ -201,11 +206,29 @@ int main(void) {
 	sc_time_t cur_point_stamp = 0; 
 	sc_time_t last_timesync_time = 0; 
 
+	uint32_t gga_parse_errors = 0;
+
+	/* We allow some time for the GPS to come up before we continue here */
+	scandal_naive_delay(100000);
+
 	setup();
+
+	scandal_naive_delay(100000);
 
 	scandal_init();
 
+	scandal_delay(1000);
+
+	/* Initialise the UART to the correct GPS baud rate */
+#if defined(LOCOSYS)
 	UART_Init(57600);
+#else
+#if defined(SANJOSE)
+	UART_Init(38400);
+#endif
+#endif
+
+	scandal_delay(1000); /* wait for the UART clocks to settle */
 
 	sc_time_t one_sec_timer = sc_get_timer(); /* Initialise the timer variable */
 
@@ -213,21 +236,22 @@ int main(void) {
 	red_led(1);
 	yellow_led(0);
 
-	scandal_delay(1000); /* wait for the UART clocks to settle */
+	/* Some GPS config stuff that isn't really necessary */
 
-	/* send a reset command */
-	mtk_send_command("$PMTK103");
+	/* We can send a reset command if need be
+	mtk_send_command("$PMTK103"); */
 
 	/* Set which messages to send out
 	 * This sets us to receive GPRMC and GPGGA on every position fix */
 	mtk_send_command("$PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0");
 
-	/* put in 5GHz mode */
-	//mtk_send_command("$PMTK220,200");
+	/* put in 5Hz mode
+	mtk_send_command("$PMTK220,200"); */
 
 	/* Change the rate at which we fix the position. Presently every 1000ms */
-	//mtk_send_command("$PMTK300,1000,0,0,0,0*");
+	mtk_send_command("$PMTK300,1000,0,0,0,0*");
 
+	/* We need a double buffer for reading the GPS messages while we parse them */
 	UART_init_double_buffer(&nmea_buf_desc_1, nmea_buf_1, NMEA_BUFFER_SIZE,
 								&nmea_buf_desc_2, nmea_buf_2, NMEA_BUFFER_SIZE);
 
@@ -238,6 +262,7 @@ int main(void) {
 		 * the number of errors and the version of scandal */
 		handle_scandal();
 
+		/* Read a line from the UART into one of the buffers */
 		nmea_current_buf = UART_readline_double_buffer(&nmea_buf_desc_1, &nmea_buf_desc_2);
 
 		/* UART_readline_double_buffer will return a pointer to the current buffer. */
@@ -247,12 +272,15 @@ int main(void) {
 			if(validate_nmea(nmea_current_buf) != 0)
 				continue;
 
-			toggle_yellow_led();
-
 			/* check to see if we have a GGA message */ 
 			if(strncmp(nmea_current_buf, "$GPGGA", 6) == 0){
-				if(parse_msg_gga(nmea_current_buf, &cur_point) == 0){
+				int res = parse_msg_gga(nmea_current_buf, &cur_point);
+				if(res == 0){
+					toggle_yellow_led();
+
 					cur_point_stamp = scandal_get_realtime32();
+					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_FIX,
+											1, cur_point_stamp);
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_TIME,
 											cur_point.time, cur_point_stamp);
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_LATITUDE,
@@ -261,12 +289,22 @@ int main(void) {
 											cur_point.lng, cur_point_stamp);
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_ALTITUDE,
 											cur_point.alt, cur_point_stamp);
+				/* an actual parse error */
+				} else if (res == -1) {
+					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_GGA_PARSE_ERROR_COUNT,
+											gga_parse_errors++, cur_point_stamp);
+				/* no fix yet */
+				} else if (res == -2) {
+					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_FIX,
+											0, cur_point_stamp);
 				}
 			}
 
 			/* check to see if we have an RMC message */ 
 			if(strncmp(nmea_current_buf, "$GPRMC", 6) == 0) {
 				if(parse_msg_rmc(nmea_current_buf, &cur_speed) == 0) {
+					toggle_red_led();
+
 					/* Milliseconds since the epoch */
 					uint64_t timestamp = cur_speed.date;
 					uint64_t timediff = 0;
@@ -311,11 +349,12 @@ int main(void) {
 				}
 			}
 		}
-
+#if 0
 		/* Flash an LED every second */
 		if(sc_get_timer() >= one_sec_timer + 1000) {
 			toggle_red_led();
 			one_sec_timer = sc_get_timer();
 		}
+#endif
 	}
 }

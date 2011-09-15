@@ -165,7 +165,9 @@ extern void SystemCoreClockUpdate (void);
 #define SYSPLL_SETUP          1
 #define SYSPLLCTRL_Val        0x00000023
 #define MAINCLKSEL_Val        0x00000003
-#define SYSAHBCLKDIV_Val      0x00000001
+#define SYSAHBCLKDIV_Val      0x00000004 // We are running the GPS barometer at 4MHz here. This is because
+										 // the LPC consumes too much power and the GPS can't reliably start
+										 // when at 16MHz.
 #define AHBCLKCTRL_Val        0x0001005F
 #define SSP0CLKDIV_Val        0x00000001
 #define UARTCLKDIV_Val        0x00000001

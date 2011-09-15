@@ -364,9 +364,9 @@ int parse_msg_gga(char* buf, gps_point* p){
 	if(read_line(buf, token, MSG_GGA_TOKENS))
 		goto err;
 
-	/* first check if valid flag was set */
-	if(*token[5]=='0' || !(*token[5]=='1' || *token[5]=='2'))
-		goto err;
+	/* GPGGA token 6 contains fix data */
+	if(!(*token[5]=='1' || *token[5]=='2'))
+		return -2;
 
 	if(parse_time(token[0], &p->time))
 		goto err;
@@ -387,20 +387,20 @@ err:
 
 #define MSG_RMC_TOKENS 11
 int parse_msg_rmc(char* buf, gps_speed* p){
-        char* token[MSG_RMC_TOKENS];
-	
-      	if(read_line(buf, token, MSG_RMC_TOKENS))
-	        goto err;
-	
+	char* token[MSG_RMC_TOKENS];
+
+	if(read_line(buf, token, MSG_RMC_TOKENS))
+		goto err;
+
 	if(parse_time_gprmc(token[0], &p->time))
 		goto err;
 
-    if(parse_date_gprmc(token[8], &p->date))
-        goto err; 
+	if(parse_date_gprmc(token[8], &p->date))
+		goto err; 
 
 	if(parse_speed(token[6], &p->speed))
-	        goto err;
-  
+		goto err;
+
 	return 0;
 err:
 	
