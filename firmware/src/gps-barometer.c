@@ -52,8 +52,8 @@
 
 /* We have two types of GPS modules. Their default baud rates are
  * different, so we have to separate them unfortunately. */
-#undef  LOCOSYS
-#define SANJOSE
+#define  LOCOSYS
+#undef SANJOSE
 
 #include <scandal/engine.h>
 #include <scandal/message.h>
@@ -61,6 +61,7 @@
 #include <scandal/utils.h>
 #include <scandal/uart.h>
 #include <scandal/stdio.h>
+#include <scandal/timer.h>
 
 #include <string.h>
 
@@ -230,8 +231,6 @@ int main(void) {
 
 	scandal_delay(1000); /* wait for the UART clocks to settle */
 
-	sc_time_t one_sec_timer = sc_get_timer(); /* Initialise the timer variable */
-
 	/* Set LEDs to known states */
 	red_led(1);
 	yellow_led(0);
@@ -278,7 +277,9 @@ int main(void) {
 				if(res == 0){
 					toggle_yellow_led();
 
+					/* get the current time so that all these messages will have the same timestamp */
 					cur_point_stamp = scandal_get_realtime32();
+
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_FIX,
 											1, cur_point_stamp);
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_TIME,
@@ -289,14 +290,14 @@ int main(void) {
 											cur_point.lng, cur_point_stamp);
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_ALTITUDE,
 											cur_point.alt, cur_point_stamp);
+
 				/* an actual parse error */
 				} else if (res == -1) {
-					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_GGA_PARSE_ERROR_COUNT,
-											gga_parse_errors++, cur_point_stamp);
+					scandal_send_channel(CRITICAL_PRIORITY, GPSBAROMETER_GGA_PARSE_ERROR_COUNT,
+											gga_parse_errors++);
 				/* no fix yet */
 				} else if (res == -2) {
-					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_FIX,
-											0, cur_point_stamp);
+					scandal_send_channel(CRITICAL_PRIORITY, GPSBAROMETER_FIX, 0);
 				}
 			}
 
@@ -327,6 +328,7 @@ int main(void) {
 					if((timediff < 50) || (timediff > 600)) {
 						last_timesync_time = sc_get_timer();
 						scandal_send_timesync(CRITICAL_PRIORITY, scandal_get_addr(), timestamp);
+						scandal_set_realtime(timestamp);
 					}
 
 					scandal_send_channel(CRITICAL_PRIORITY, GPSBAROMETER_SPEED, cur_speed.speed * 1000);
