@@ -44,6 +44,7 @@ int parse_altitude(char* alt, char* units, int32_t* result);
 int parse_date_gprmc(char* date, uint32_t* result);
 int parse_time_gprmc(char* time, uint32_t* result);
 int parse_msg_gga(char* buf, gps_point* p);
+char *get_gga_time_string(void);
 int nmea_read(char* buf, int len);
 int nmea_readline();
 void nmea_readbuf(char* buf);
