@@ -53,8 +53,8 @@
 /* We have two types of GPS modules. Their default baud rates are
  * different, so we have to separate them unfortunately.
  * The LOCOSYS is the newer one that can acquire like lightning (Node 31). */
-#undef  LOCOSYS
-#define SANJOSE
+#define  LOCOSYS
+#undef SANJOSE
 
 #include <scandal/engine.h>
 #include <scandal/message.h>
@@ -63,9 +63,9 @@
 #include <scandal/uart.h>
 #include <scandal/stdio.h>
 
-#include <bmp_085.h>
+#include <project/bmp085.h>
 
-#include <project/string.h>
+#include <string.h>
 
 #if defined(lpc11c14) || defined(lpc1768)
 #include <project/driver_config.h>
@@ -81,6 +81,8 @@
 #include <msp430x14x.h>
 #include <signal.h>
 #include <project/hardware.h>
+
+uint8_t gps_lock = 0;
 
 /* Set up the clocks on the MSP430f149. Use XTAL2, which is externally attached */
 void init_clock(void) {
@@ -215,7 +217,6 @@ int main(void) {
 	gps_speed cur_speed; 
 	sc_time_t cur_point_stamp = 0; 
 	sc_time_t last_timesync_time = 0; 
-
 	uint32_t gga_parse_errors = 0;
 
 	/* We allow some time for the GPS to come up before we continue here */
@@ -248,8 +249,8 @@ int main(void) {
 
 	// Set up the barometer
 	long b5, pres, temp, alt, up, ut;
-	Bmp085_cal barometerCal = readCalibrationValues();		//read calibration values
-	
+	readCalibrationValues();		//read calibration values
+
 	/* Some GPS config stuff that isn't really necessary */
 
 	/* We can send a reset command if need be
@@ -274,7 +275,8 @@ int main(void) {
 		/* This checks whether there are pending requests from CAN, and sends a heartbeat message.
 		 * The heartbeat message encodes some data in the first 4 bytes of the CAN message, such as
 		 * the number of errors and the version of scandal */
-		handle_scandal();		
+		handle_scandal();
+		ReadTime(); //CHARITH EDIT
 
 		/* Read a line from the UART into one of the buffers */
 		nmea_current_buf = UART_readline_double_buffer(&nmea_buf_desc_1, &nmea_buf_desc_2);
@@ -303,6 +305,8 @@ int main(void) {
 											cur_point.lng, cur_point_stamp);
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_ALTITUDE,
 											cur_point.alt, cur_point_stamp);
+
+					gps_lock=1;
 				/* an actual parse error */
 				} else if (res == -1) {
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_GGA_PARSE_ERROR_COUNT,
@@ -311,6 +315,7 @@ int main(void) {
 				} else if (res == -2) {
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_FIX,
 											0, cur_point_stamp);
+					gps_lock=0;
 				}
 			}
 
@@ -319,8 +324,6 @@ int main(void) {
 				if(parse_msg_rmc(nmea_current_buf, &cur_speed) == 0) {
 					toggle_red_led();
 
-					ReadSeconds();
-					//StartOsc();
 					/* Milliseconds since the epoch */
 					uint64_t timestamp = cur_speed.date;
 					uint64_t timediff = 0;
@@ -365,15 +368,19 @@ int main(void) {
 				}
 			}
 		}
+		
 		ut = bmp085ReadUT();					//read uncompensated temperature
 		scandal_delay(5);					//delay 4.5ms
 		up = bmp085ReadUP();					//read uncompensated pressure
 		scandal_delay(5);					//delay 4.5ms    
-		b5 = bmp085(ut, barometerCal);				//calculate temperature constant
+		b5 = bmp085Getb5(ut);				//calculate temperature constant
 		temp = bmp085GetTemperature(ut, b5);			//calculate true temperature
-		pres = bmp085GetPressure(up, barometerCal, b5);		//calculate true pressure
-		alt = bmp085GetAltitude(pres);				//estimate the altitude	
-#if 0
+		pres = bmp085GetPressure(up, b5);		//calculate true pressure
+		alt = bmp085GetAltitude(pres);				//estimate the altitude
+		//UART_printf("B5: %d,Temp: %d:%d, Pres: %d:%d, Alt: %d\r\n", (int) b5,(int) ut, (int) temp, (int)up,(int) pres, (int) alt);
+//		UART_printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n",(int) barometerCal -> AC1,(int) barometerCal -> AC2,(int) barometerCal -> AC3,(int) barometerCal -> AC4,(int) barometerCal -> AC5,(int) barometerCal -> AC6,(int) barometerCal -> B1,(int) barometerCal -> B2,(int) barometerCal -> MB,(int) barometerCal -> MC,(int) barometerCal -> MD);
+
+		#if 0
 		/* Flash an LED every second */
 		if(sc_get_timer() >= one_sec_timer + 1000) {
 			toggle_red_led();

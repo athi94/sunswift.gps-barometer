@@ -5,10 +5,17 @@
 
 #include <scandal/leds.h>
 
+#define INCL_RTC 0
+
+#if INCL_RTC
+#endif
+
 //extern uint8_t buffer_ready;
 //extern uint8_t buf_flag;
 //extern char buf0[NMEA_BUFFER_SIZE];
 //extern char buf1[NMEA_BUFFER_SIZE];
+
+static char *gga_time_string=0;
 
 int validate_nmea(char* input){
 	char realsum = 0;
@@ -99,6 +106,10 @@ int parse_time(char* time, uint32_t* result){
 	r+=(uint32_t)t[3]*60;
 	r+=(uint32_t)t[4]*10;
 	r+=(uint32_t)t[5];
+
+#if INCL_RTC
+	SmartUpdate(t, 0, 2); //Sends the GPS Time to SmartUpdate
+#endif
 
 	r*=(uint32_t)1000; /* convert to milliseconds */
 
@@ -206,6 +217,10 @@ parse_date_gprmc(char* date, uint32_t* result){
             return -1;
 		date++;
 	}
+
+#if INCL_RTC
+    SmartUpdate(t, 0, 1); //Sends the GPS date to SmartUpdate
+#endif
     
     r = days_since_epoch(   t[0] * 10 + t[1], 
                             t[2] * 10 + t[3], 
@@ -368,9 +383,11 @@ int parse_msg_gga(char* buf, gps_point* p){
 	if(!(*token[5]=='1' || *token[5]=='2'))
 		return -2;
 
-	if(parse_time(token[0], &p->time))
+	if(parse_time(token[0], &p->time)) {
+	      gga_time_string = token[0];
 		goto err;
-
+	}
+	
 	if(parse_latitude(token[1], token[2], &p->lat))
 		goto err;
 
@@ -383,6 +400,13 @@ int parse_msg_gga(char* buf, gps_point* p){
 	return 0;
 err:
 	return -1;
+}
+
+char *get_gga_time_string(void) {
+    if (gga_time_string[0] != '0')
+	  return gga_time_string;
+    else
+	  return NULL;
 }
 
 #define MSG_RMC_TOKENS 11

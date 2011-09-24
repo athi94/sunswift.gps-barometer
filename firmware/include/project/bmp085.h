@@ -1,11 +1,5 @@
 #include <sys/types.h>
 
-extern volatile uint32_t I2CCount;
-extern volatile uint8_t I2CMasterBuffer[BUFSIZE];
-extern volatile uint8_t I2CSlaveBuffer[BUFSIZE];
-extern volatile uint32_t I2CMasterState;
-extern volatile uint32_t I2CReadLength, I2CWriteLength;
-
 typedef struct bmp085_cal_struct *Bmp085_cal;
 struct bmp085_cal_struct {
   short AC1;
@@ -21,7 +15,7 @@ struct bmp085_cal_struct {
   short MD;
 };
 //Over Sampling Setting
-#define 0SS 		0
+#define OVER_SAMPLING_SETTING 		0
 //Refer to page ten of BMP085 datsheet
 //0: Ultra low power
 //1: Standard
@@ -32,7 +26,7 @@ struct bmp085_cal_struct {
 #define BMP_READ		0x01
 
 #define TEMP_READ 		0x2E
-#define PRES_READ 		(0x34 + (OSS << 6))
+#define PRES_READ 		(0x34 + (OVER_SAMPLING_SETTING << 6))
 
 #define CTL_REG 		0xF4
 //Address refers to msb, lsb is the next addres
@@ -51,14 +45,15 @@ struct bmp085_cal_struct {
 
 #define PRESSURE_SEALEVEL 101325 //Pa
 
-Bmp085_cal readCalibrationValues(void);
-long bmp085ReadUT(void)
-long bmp085ReadUP(void)
+void readCalibrationValues(void);
+long bmp085ReadUT(void);
+long bmp085ReadUP(void);
 
-long bmp085Getb5((long ut,Bmp085_cal barometerCal);
+long bmp085Getb5(long ut);
 long bmp085GetTemperature(long ut,long b5);
-long bmp085GetPressure(long up, Bmp085_cal barometerCal, long b5);
+long bmp085GetPressure(long up, long b5);
 long bmp085GetAltitude(long pres);
+long bmp085Read24bit(unsigned char address);
 
 unsigned char bmp085ReadByte(unsigned char address);
 short bmp085ReadShort(unsigned char address);

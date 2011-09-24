@@ -82,7 +82,7 @@ program: $(BUILD)/main.axf
 	@lsusb | grep -q "1fc9:0009"; \
 	if [ $$? -eq 0 ]; then \
 		echo -e "$(RED)[PROGRAM]   detected LPC Expresso in correct mode, attempting program$(NORMAL)"; \
-		$(FLASH_CHIP) -wire=winusb -p$(UC) -flash-load-exec=$(BUILD)/main.axf > /tmp/flash.out 2>&1; \
+		$(FLASH_CHIP) -wire=winusb -p$(UC) -flash-load-exec=$(BUILD)/main.axf; \
 		if [ $$? -ne 0 ]; then \
 			echo -e "$(RED)[PROGRAM]   FAILED!$(NORMAL)"; \
 			cat /tmp/flash.out; \
@@ -92,5 +92,5 @@ program: $(BUILD)/main.axf
 	fi
 
 #program using .bin, doesn't seem to work atm
-#sudo $(FLASH_CHIP) -wire=winusb -p$(UC) -flash-load=$(BUILD)/main.bin -load-base=0x0000
+sudo $(FLASH_CHIP) -wire=winusb -p$(UC) -flash-load=$(BUILD)/main.bin -load-base=0x0000
 

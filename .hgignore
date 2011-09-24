@@ -12,7 +12,6 @@ syntax: glob
 *.lst
 *.map
 *.sw*
-*.orig
 */Project Outputs*
 cscope.files
 cscope.out
