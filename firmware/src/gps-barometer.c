@@ -218,6 +218,7 @@ int main(void) {
 	sc_time_t cur_point_stamp = 0; 
 	sc_time_t last_timesync_time = 0; 
 	uint32_t gga_parse_errors = 0;
+	uint32_t next_baro_read=0;
 
 	/* We allow some time for the GPS to come up before we continue here */
 	scandal_naive_delay(100000);
@@ -306,7 +307,7 @@ int main(void) {
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_ALTITUDE,
 											cur_point.alt, cur_point_stamp);
 
-					gps_lock=1;
+					//gps_lock=1;
 				/* an actual parse error */
 				} else if (res == -1) {
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_GGA_PARSE_ERROR_COUNT,
@@ -315,7 +316,7 @@ int main(void) {
 				} else if (res == -2) {
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_FIX,
 											0, cur_point_stamp);
-					gps_lock=0;
+					//gps_lock=0;
 				}
 			}
 
@@ -368,15 +369,22 @@ int main(void) {
 				}
 			}
 		}
-		
-		ut = bmp085ReadUT();					//read uncompensated temperature
-		scandal_delay(5);					//delay 4.5ms
-		up = bmp085ReadUP();					//read uncompensated pressure
-		scandal_delay(5);					//delay 4.5ms    
-		b5 = bmp085Getb5(ut);				//calculate temperature constant
-		temp = bmp085GetTemperature(ut, b5);			//calculate true temperature
-		pres = bmp085GetPressure(up, b5);		//calculate true pressure
-		alt = bmp085GetAltitude(pres);				//estimate the altitude
+
+#if 1
+		if (sc_get_timer() > next_baro_read){
+
+		    ut = bmp085ReadUT();					//read uncompensated temperature
+		    scandal_delay(5);					//delay 4.5ms
+		    up = bmp085ReadUP();					//read uncompensated pressure
+		    scandal_delay(5);					//delay 4.5ms
+		    b5 = bmp085Getb5(ut);				//calculate temperature constant
+		    temp = bmp085GetTemperature(ut, b5);			//calculate true temperature
+		    pres = bmp085GetPressure(up, b5);		//calculate true pressure
+		    alt = bmp085GetAltitude(pres);				//estimate the altitude
+		    next_baro_read=(sc_get_timer()+1000);
+		}
+
+#endif
 		//UART_printf("B5: %d,Temp: %d:%d, Pres: %d:%d, Alt: %d\r\n", (int) b5,(int) ut, (int) temp, (int)up,(int) pres, (int) alt);
 //		UART_printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n",(int) barometerCal -> AC1,(int) barometerCal -> AC2,(int) barometerCal -> AC3,(int) barometerCal -> AC4,(int) barometerCal -> AC5,(int) barometerCal -> AC6,(int) barometerCal -> B1,(int) barometerCal -> B2,(int) barometerCal -> MB,(int) barometerCal -> MC,(int) barometerCal -> MD);
 
