@@ -1,6 +1,7 @@
 #include <sys/types.h>
 
 #include <project/rtc_mcp79410.h>
+#include <project/nmea.h>
 #include <project/driver_config.h>
 #include <project/target_config.h>
 
@@ -90,9 +91,31 @@ int ReadTime(void){
     rtc_year1=  inputArr[5];
 */
 
-    UART_printf("%d%d:%d%d:%d%d\n\r", hr10, hr, min10, min, sec10, sec);
-    UART_printf("%d%d - %d%d - %d%d\n\r", dom10, dom, mon10, mon, year10, year);
-        
+    UART_printf("RTC: %d%d:%d%d:%d%d\n\r", hr10, hr, min10, min, sec10, sec);
+    UART_printf("RTC: %d%d - %d%d - %d%d\n\r", dom10, dom, mon10, mon, year10, year);
+
+    char* time = get_gga_time_array();
+    uint8_t i;
+    uint8_t t[6];
+
+    UART_printf("GPSTME: %d%d %d%d %d%d\r\n",*time++,*time++,*time++,*time++,*time++,*time);
+    
+    if (time!=NULL){
+	 /* for(i=0; i<6; i++){
+		if(*time>='0' && *time<='9')
+		    t[i]=*time-'0';
+		else
+		    //UART_printf("Time conversion fail, returning\r\n");
+		    return -1;
+		time++;
+	  }
+	 for(i=0; i<6; i++){
+	     t[i]=*time++;
+    }*/
+	 //UART_printf("ReadTime: %d%d %d%d %d%d\r\n",t[0],t[1],t[2],t[3],t[4],t[5]);
+    }else{
+	  UART_printf("RT :( %X\r\n", get_gga_time_array());
+    }    
     return I2CSlaveBuffer[0];
 }
 
@@ -171,6 +194,8 @@ int SetDate(char* DateArray){
     mon=	DateArray[3];
     year10=	DateArray[4];
     year=	DateArray[5];
+
+    //UART_printf("SetDate: %d%d / %d%d / %d%d\r\n", dom10, dom, mon10, mon, year10, year);
     
     I2CWriteLength = 5;
     I2CReadLength = 0;
@@ -183,67 +208,5 @@ int SetDate(char* DateArray){
     I2CEngine();
 
     return 0;
-    
-}
-
-void SmartUpdate(char inputArr[], uint32_t inputVal, uint8_t type){
-
-    static uint8_t gps_date1, gps_date10, gps_month1, gps_month10, gps_year1, gps_year10;
-    static uint8_t gps_sec, gps_sec10, gps_min, gps_min10, gps_hr, gps_hr10;
-    static uint8_t rtc_date1, rtc_date10, rtc_month1, rtc_month10, rtc_year1, rtc_year10;
-    static uint8_t rtc_sec, rtc_sec10, rtc_min, rtc_min10, rtc_hr, rtc_hr10;
-    
-    uint8_t rtc_Valid=0, gps_Valid=0;
-
-    if(type==0){
-      
-    }
-    
-    //GPS date input
-    if(type==1){
-      gps_date10=   inputArr[0];
-      gps_date1=    inputArr[1];
-      gps_month10=  inputArr[2];
-      gps_month1=   inputArr[3];
-      gps_year10=   inputArr[4];
-      gps_year1=    inputArr[5];
-    }
-
-    //GPS time input
-    if(type==2){
-      gps_hr10=	inputArr[0];
-      gps_hr=	inputArr[1];
-      gps_min10=	inputArr[2];
-      gps_min=	inputArr[3];
-      gps_sec10=	inputArr[4];
-      gps_sec=	inputArr[5];
-    }
-
-    if(type==3){
-      rtc_date10=   inputArr[0];
-      rtc_date1=    inputArr[1];
-      rtc_month10=  inputArr[2];
-      rtc_month1=   inputArr[3];
-      rtc_year10=   inputArr[4];
-      rtc_year1=    inputArr[5];
-    }
-
-    /*If GPS locked and valid, time and date to the RTC
-    The other statements are to ensure the data is reasonable (year > 2003)
-    and that a new minute is not just about to come as it may cause errors on the RTC
-    depending on when the writes happen. This is to avoid having to stop and restart the oscillator
-    
-
-    */
-    if((type==5) && ((gps_year10*10 + gps_year1) > 3) && ((gps_sec10*10 + gps_sec) < 55) ){
-    
-	  
-    }
-
-
-    if((rtc_year1 + rtc_year10 * 10) > 2){
-      rtc_Valid = 1;
-    }
-
     
 }
