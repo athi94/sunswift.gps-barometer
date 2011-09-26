@@ -219,6 +219,7 @@ int main(void) {
 	sc_time_t last_timesync_time = 0; 
 	uint32_t gga_parse_errors = 0;
 	uint32_t next_baro_read=0;
+	uint32_t next_rtc_time=0;
 
 	/* We allow some time for the GPS to come up before we continue here */
 	scandal_naive_delay(100000);
@@ -277,7 +278,12 @@ int main(void) {
 		 * The heartbeat message encodes some data in the first 4 bytes of the CAN message, such as
 		 * the number of errors and the version of scandal */
 		handle_scandal();
-		ReadTime(); //CHARITH EDIT
+
+		if (sc_get_timer() > next_rtc_time){
+		    ReadTime();
+		    next_rtc_time+=250;
+		}
+		
 
 		/* Read a line from the UART into one of the buffers */
 		nmea_current_buf = UART_readline_double_buffer(&nmea_buf_desc_1, &nmea_buf_desc_2);
@@ -293,6 +299,7 @@ int main(void) {
 			if(strncmp(nmea_current_buf, "$GPGGA", 6) == 0){
 				int res = parse_msg_gga(nmea_current_buf, &cur_point);
 				if(res == 0){
+				   /*If the GPS is locked (res==0), send GPS data and set the RTC*/
 					toggle_yellow_led();
 
 					cur_point_stamp = scandal_get_realtime32();
@@ -306,8 +313,15 @@ int main(void) {
 											cur_point.lng, cur_point_stamp);
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_ALTITUDE,
 											cur_point.alt, cur_point_stamp);
+					/* Only sets the RTC if the seconds value is under 58
+					 * This is done to make sure nothing ticks over in the
+					 * middle of a write process as strange values may result
+					 */
+					if((cur_point.time%60000) < 57000){
+					    SetTime(get_gga_time_array());
+					    SetDate(get_rmc_date_array());
+				      }
 
-					//gps_lock=1;
 				/* an actual parse error */
 				} else if (res == -1) {
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_GGA_PARSE_ERROR_COUNT,

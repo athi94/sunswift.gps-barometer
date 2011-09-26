@@ -5,17 +5,14 @@
 
 #include <scandal/leds.h>
 
-#define INCL_RTC 0
-
-#if INCL_RTC
-#endif
 
 //extern uint8_t buffer_ready;
 //extern uint8_t buf_flag;
 //extern char buf0[NMEA_BUFFER_SIZE];
 //extern char buf1[NMEA_BUFFER_SIZE];
 
-static char *gga_time_string=0;
+static char *gga_time_array=0;
+static char *rmc_date_array=0;
 
 int validate_nmea(char* input){
 	char realsum = 0;
@@ -90,7 +87,7 @@ int read_line(char* buf, char** output, int tokens){
 int parse_time(char* time, uint32_t* result){
         uint32_t i;
         uint32_t r;
-		char t[6];
+	  static char t[6];
 
 	for(i=0; i<6; i++){
 		if(*time>='0' && *time<='9')
@@ -100,16 +97,17 @@ int parse_time(char* time, uint32_t* result){
 		time++;
 	}
 
+    /*Stores the location of this static time array
+     * such that it can be grabbed for use by other things */
+    gga_time_array=&t[0];
+
+
 	r =(uint32_t)t[0]*10*60*60;
 	r+=(uint32_t)t[1]*60*60;
 	r+=(uint32_t)t[2]*10*60;
 	r+=(uint32_t)t[3]*60;
 	r+=(uint32_t)t[4]*10;
 	r+=(uint32_t)t[5];
-
-#if INCL_RTC
-	SmartUpdate(t, 0, 2); //Sends the GPS Time to SmartUpdate
-#endif
 
 	r*=(uint32_t)1000; /* convert to milliseconds */
 
@@ -121,7 +119,7 @@ int parse_time(char* time, uint32_t* result){
 int parse_time_gprmc(char* time, uint32_t* result){
         int i;
         uint32_t r;
-	char t[10];
+	  char t[10];
 
 	for(i=0; i<10; i++){
 		if(*time>='0' && *time<='9')
@@ -131,7 +129,7 @@ int parse_time_gprmc(char* time, uint32_t* result){
                 return -1;
 		time++;
 	}
-    
+	
 	r = 0; 
 	r = t[0]; 
 	r *= 10;   r += t[1]; 
@@ -208,27 +206,25 @@ int
 parse_date_gprmc(char* date, uint32_t* result){
     int i;
     uint32_t r;
-    char t[6];
+    static char t[6];
 
-	for(i=0; i<6; i++){
-		if(*date>='0' && *date<='9')
-			t[i]=*date-'0';
-		else
-            return -1;
-		date++;
-	}
-
-#if INCL_RTC
-    SmartUpdate(t, 0, 1); //Sends the GPS date to SmartUpdate
-#endif
+    for(i=0; i<6; i++){
+	  if(*date>='0' && *date<='9')
+		    t[i]=*date-'0';
+	  else
+	  return -1;
+	  date++;
+    }
+    
+    rmc_date_array=&t[0];
     
     r = days_since_epoch(   t[0] * 10 + t[1], 
                             t[2] * 10 + t[3], 
                             t[4] * 10 + t[5] );
     
-	*result = r;
+    *result = r;
 
-	return 0;
+    return 0;
 }
 
 
@@ -375,7 +371,7 @@ int parse_speed(char* speed, uint32_t* result){
 #define MSG_GGA_TOKENS 14
 int parse_msg_gga(char* buf, gps_point* p){
 	char* token[MSG_GGA_TOKENS];
-
+	
 	if(read_line(buf, token, MSG_GGA_TOKENS))
 		goto err;
 
@@ -384,7 +380,6 @@ int parse_msg_gga(char* buf, gps_point* p){
 		return -2;
 
 	if(parse_time(token[0], &p->time)) {
-	      gga_time_string = token[0];
 		goto err;
 	}
 	
@@ -396,15 +391,25 @@ int parse_msg_gga(char* buf, gps_point* p){
 
 	if(parse_altitude(token[8], token[9], &p->alt))
 		goto err;
-
+	//gga_time_string = token[0];
+	//UART_printf("Tokens: %d:%d %d:%d %d:%d\r\n", gga_time_string++, gga_time_string++, gga_time_string++, gga_time_string++, gga_time_string++, gga_time_string);
+	//gga_time_string = token[0];
+	
 	return 0;
 err:
 	return -1;
 }
 
-char *get_gga_time_string(void) {
-    if (gga_time_string[0] != '0')
-	  return gga_time_string;
+char *get_gga_time_array(void) {
+    if (gga_time_array[0] != '0')
+	  return gga_time_array;
+    else
+	  return NULL;
+}
+
+char *get_rmc_date_array(void) {
+    if (rmc_date_array[0] != '0')
+	  return rmc_date_array;
     else
 	  return NULL;
 }
