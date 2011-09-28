@@ -53,7 +53,7 @@
 /* We have two types of GPS modules. Their default baud rates are
  * different, so we have to separate them unfortunately.
  * The LOCOSYS is the newer one that can acquire like lightning (Node 31). */
-#define  LOCOSYS
+#define LOCOSYS
 #undef SANJOSE
 
 #include <scandal/engine.h>
@@ -327,7 +327,7 @@ int main(void) {
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_GGA_PARSE_ERROR_COUNT,
 											gga_parse_errors++, cur_point_stamp);
 				/* no fix yet */
-				} else if (res == -2) {
+				} else if (res == 2) {
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_FIX,
 											0, cur_point_stamp);
 					//gps_lock=0;
@@ -362,6 +362,8 @@ int main(void) {
 						last_timesync_time = sc_get_timer();
 						scandal_send_timesync(CRITICAL_PRIORITY, scandal_get_addr(), timestamp);
 					}
+
+					scandal_set_realtime(timestamp);
 
 					scandal_send_channel(CRITICAL_PRIORITY, GPSBAROMETER_SPEED, cur_speed.speed * 1000);
 					scandal_send_channel(CRITICAL_PRIORITY, GPSBAROMETER_MILLISECONDS_TODAY, cur_speed.time);
