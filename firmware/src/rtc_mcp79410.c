@@ -19,6 +19,7 @@ extern volatile uint8_t I2CSlaveBuffer[BUFSIZE];
 extern volatile uint32_t I2CMasterState;
 extern volatile uint32_t I2CReadLength, I2CWriteLength;
 
+#define ENABLE_CLOCK_OUT 0x40
 #define ADDR_RTC_SRAM   0xDE
 #define ADDR_EEPROM 	0xAE
 #define ENABLE_OSC 	0x80
@@ -63,7 +64,7 @@ int ReadTime(void){
     sec10=  ((I2CSlaveBuffer[0]>>4) & 0x07);
     min=    ((I2CSlaveBuffer[1]>>0) & 0x0F);
     min10=  ((I2CSlaveBuffer[1]>>4) & 0x07);
-    hr= ((I2CSlaveBuffer[2]>>0) & 0x0F);
+    hr=     ((I2CSlaveBuffer[2]>>0) & 0x0F);
     hr10=   ((I2CSlaveBuffer[2]>>4) & 0x03);
 
     dom=    ((I2CSlaveBuffer[4]>>0) & 0x0F);
@@ -93,6 +94,7 @@ int ReadTime(void){
 
     UART_printf("RTC: %d%d:%d%d:%d%d\n\r", hr10, hr, min10, min, sec10, sec);
     UART_printf("RTC: %d%d - %d%d - %d%d\n\r", dom10, dom, mon10, mon, year10, year);
+    UART_printf("Scandal time: %u\n\r",scandal_get_realtime32());
 
     char* time = get_gga_time_array();
     uint8_t i;
@@ -119,6 +121,85 @@ int ReadTime(void){
     return I2CSlaveBuffer[0];
 }
 
+uint64_t getRTCTimeSecond(void) {
+    
+    int sec, sec10; //Second in minute
+    int min, min10; //Minute of hour
+    int hr, hr10;   //Hour of day
+    int dom, dom10;     //Date of month
+    int mon, mon10;     //Month of year
+    int year, year10;   //Year in XX format
+    uint32_t rtc_dateArr[6], rtc_timeArr[6];
+    
+    I2CWriteLength = 2;
+    I2CReadLength = 7;
+    I2CMasterBuffer[0] = ADDR_RTC_SRAM;
+    I2CMasterBuffer[1] = 0x00; // Start read register
+    I2CMasterBuffer[2] = ADDR_RTC_SRAM | RD_BIT;
+    // Put if statement here!
+    I2CEngine();
+    
+    sec=    ((I2CSlaveBuffer[0]>>0) & 0x0F);
+    sec10=  ((I2CSlaveBuffer[0]>>4) & 0x07);
+    min=    ((I2CSlaveBuffer[1]>>0) & 0x0F);
+    min10=  ((I2CSlaveBuffer[1]>>4) & 0x07);
+    hr=     ((I2CSlaveBuffer[2]>>0) & 0x0F);
+    hr10=   ((I2CSlaveBuffer[2]>>4) & 0x03);
+    
+    return (sec+(sec10*10)+(min*60)+(min10*600)+(hr*60*60)+(hr10*10*60*60));
+}
+
+int getRTCDay(void) {
+    int dom, dom10;     //Date of month
+    
+    I2CWriteLength = 2;
+    I2CReadLength = 7;
+    I2CMasterBuffer[0] = ADDR_RTC_SRAM;
+    I2CMasterBuffer[1] = 0x00; // Start read register
+    I2CMasterBuffer[2] = ADDR_RTC_SRAM | RD_BIT;
+    // Put if statement here!
+    I2CEngine();
+    
+    dom=    ((I2CSlaveBuffer[4]>>0) & 0x0F);
+    dom10=  ((I2CSlaveBuffer[4]>>4) & 0x03);
+    
+    return(dom+dom10*10);
+}
+
+int getRTCMonth(void) {
+    int mon, mon10;     //Month of year
+    
+    I2CWriteLength = 2;
+    I2CReadLength = 7;
+    I2CMasterBuffer[0] = ADDR_RTC_SRAM;
+    I2CMasterBuffer[1] = 0x00; // Start read register
+    I2CMasterBuffer[2] = ADDR_RTC_SRAM | RD_BIT;
+    // Put if statement here!
+    I2CEngine();
+    
+    mon=    ((I2CSlaveBuffer[5]>>0) & 0x0F);
+    mon10=  ((I2CSlaveBuffer[5]>>4) & 0x01);
+    
+    return(mon+mon10*10);
+}
+
+int getRTCYear(void) {
+    int year, year10;   //Year in XX format
+    
+    I2CWriteLength = 2;
+    I2CReadLength = 7;
+    I2CMasterBuffer[0] = ADDR_RTC_SRAM;
+    I2CMasterBuffer[1] = 0x00; // Start read register
+    I2CMasterBuffer[2] = ADDR_RTC_SRAM | RD_BIT;
+    // Put if statement here!
+    I2CEngine();
+    
+    year=   ((I2CSlaveBuffer[6]>>0) & 0x0F);
+    year10= ((I2CSlaveBuffer[6]>>4) & 0x0F);
+    
+    return(year+year10*10);
+}
+
 void StartOsc(void){
     
     I2CWriteLength = 2;
@@ -136,7 +217,7 @@ void StartOsc(void){
       I2CWriteLength = 3;
       I2CReadLength = 0;
       I2CMasterBuffer[0] = ADDR_RTC_SRAM;
-      I2CMasterBuffer[1] = 0x00; // Start read register
+      I2CMasterBuffer[1] = 0x00; // Start write register
       I2CMasterBuffer[2] =  I2CSlaveBuffer[0] | 0x80; //Enables the START OSCILLATOR bit so the clock ticks
       I2CEngine();
     }
@@ -147,12 +228,18 @@ void StartOsc(void){
       I2CWriteLength = 3;
       I2CReadLength = 0;
       I2CMasterBuffer[0] = ADDR_RTC_SRAM;
-      I2CMasterBuffer[1] = 0x03; // Start read register
+      I2CMasterBuffer[1] = 0x03; // Start write register
       I2CMasterBuffer[2] =  I2CSlaveBuffer[3] | 0x08; //Enables the VBATEN so
       I2CEngine();
     }
-
     
+
+    I2CWriteLength = 3;
+    I2CReadLength = 0;
+    I2CMasterBuffer[0] = ADDR_RTC_SRAM;
+    I2CMasterBuffer[1] = 0x07; // Start write register
+    I2CMasterBuffer[2] = 0x40; // Enables 1Hz clock on MFP
+    I2CEngine();
 }
 
 int SetTime(char* TimeArray){

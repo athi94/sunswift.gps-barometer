@@ -53,8 +53,8 @@
 /* We have two types of GPS modules. Their default baud rates are
  * different, so we have to separate them unfortunately.
  * The LOCOSYS is the newer one that can acquire like lightning (Node 31). */
-#define LOCOSYS
-#undef SANJOSE
+#define SANJOSE
+#undef LOCOSYS
 
 #include <scandal/engine.h>
 #include <scandal/message.h>
@@ -130,17 +130,31 @@ interrupt (PORT2_VECTOR) port2int(void) {
 
 /* Do some general setup for clocks, LEDs and interrupts
  * and UART stuff on the MSP430 */
+
+
+// resync timer every second
+void gps_timer_handler() {
+    sc_init_timer_1();
+    GPIO_IntClear(2, 10);
+}
+
 void setup(void) {
 #if defined(lpc11c14) || defined(lpc1768)
+    
 	GPIO_Init();
 	GPIO_SetDir(RED_LED_PORT, RED_LED_BIT, 1);
 	GPIO_SetDir(YELLOW_LED_PORT, YELLOW_LED_BIT, 1);
+    // Register the GPS timer sync
+    GPIO_SetFunction(2, 10, GPIO_PIO, GPIO_MODE_NONE);
+	GPIO_SetDir(2, 10, 0);
+    GPIO_RegisterInterruptHandler(2, 10, 0, 0, 1, &gps_timer_handler);
 
 	InitRTC();
+    SetTime("000000"); // FOR DEBUG PURPOSE, REMOVE LATER
 	scandal_naive_delay(100000);
 	
-	StartOsc();
-	
+	// StartOsc();
+	   
 #else
 #ifdef msp43f149
 	init_clock();
@@ -170,6 +184,7 @@ void setup(void) {
 	P5DIR = CAN_CS | SIMO1 | UCLK1 | YELLOW_LED_BIT | RED_LED_BIT;
 
 	P6SEL = MEAS_12V_PIN;
+    
 #endif // msp430f149
 #endif // lpc1768 || lpc11c14
 } // setup
@@ -180,13 +195,16 @@ void setup(void) {
  * and
  *  http://www.sparkfun.com/datasheets/GPS/EB-230-Data-Sheet-V1.2.pdf
  */ 
+
+
+
 void mtk_send_command(char* command){
 	uint8_t  checksum = 0; 
 	int i; 
 
 	/* Send what we have first, and then calculate checksums, etc while
 	 its sending */ 
-	UART_printf("%s", command); 
+	UART_printf("%s", command);
 
 	for(i=0; command[i] != '$'; i++)
 		;
@@ -209,6 +227,7 @@ void mtk_send_command(char* command){
 /* This is your main function! You should have an infinite loop in here that
  * does all the important stuff your node was designed for */
 int main(void) {
+    int initialGPSLock = 1;
 	char nmea_buf_1[NMEA_BUFFER_SIZE];
 	char nmea_buf_2[NMEA_BUFFER_SIZE];
 	char *nmea_current_buf;
@@ -223,13 +242,10 @@ int main(void) {
 
 	/* We allow some time for the GPS to come up before we continue here */
 	scandal_naive_delay(100000);
-
 	setup();
-
 	scandal_naive_delay(100000);
 
 	scandal_init();
-
 	scandal_delay(1000);
 
 	/* Initialise the UART to the correct GPS baud rate */
@@ -240,7 +256,6 @@ int main(void) {
 	UART_Init(38400);
 #endif
 #endif
-
 	scandal_delay(1000); /* wait for the UART clocks to settle */
 
 	sc_time_t one_sec_timer = sc_get_timer(); /* Initialise the timer variable */
@@ -281,9 +296,9 @@ int main(void) {
 
 		if (sc_get_timer() > next_rtc_time){
 		    ReadTime();
+            UART_printf("Scandal Get Timer: %d\r\n", sc_get_timer_1());
 		    next_rtc_time+=250;
 		}
-		
 
 		/* Read a line from the UART into one of the buffers */
 		nmea_current_buf = UART_readline_double_buffer(&nmea_buf_desc_1, &nmea_buf_desc_2);
@@ -299,9 +314,15 @@ int main(void) {
 			if(strncmp(nmea_current_buf, "$GPGGA", 6) == 0){
 				int res = parse_msg_gga(nmea_current_buf, &cur_point);
 				if(res == 0){
+                    if(initialGPSLock == 1) {
+                        // Syncs GPS clock with RTC
+                        SetTime(get_gga_time_array());
+                        SetDate(get_rmc_date_array());
+                        initialGPSLock = 0;
+                    }
 				   /*If the GPS is locked (res==0), send GPS data and set the RTC*/
 					toggle_yellow_led();
-
+                    
 					cur_point_stamp = scandal_get_realtime32();
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_FIX,
 											1, cur_point_stamp);
@@ -317,17 +338,13 @@ int main(void) {
 					 * This is done to make sure nothing ticks over in the
 					 * middle of a write process as strange values may result
 					 */
-					if((cur_point.time%60000) < 57000){
-					    SetTime(get_gga_time_array());
-					    SetDate(get_rmc_date_array());
-				      }
-
+                    
 				/* an actual parse error */
 				} else if (res == -1) {
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_GGA_PARSE_ERROR_COUNT,
 											gga_parse_errors++, cur_point_stamp);
 				/* no fix yet */
-				} else if (res == 2) {
+				} else if (res == -2) {
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_FIX,
 											0, cur_point_stamp);
 					//gps_lock=0;
@@ -340,25 +357,37 @@ int main(void) {
 					toggle_red_led();
 
 					/* Milliseconds since the epoch */
-					uint64_t timestamp = cur_speed.date;
-					uint64_t timediff = 0;
+                    /* Converts date to milliseconds, adds time */
+					uint64_t timestamp = days_since_epoch(getRTCDay(), getRTCMonth(), getRTCYear());
 					timestamp *= 3600;
 					timestamp *= 24;
 					timestamp *= 1000;
-					timestamp += cur_speed.time;
-
+                    timestamp += getRTCTimeSecond() * 1000;
+                    timestamp += sc_get_timer_1();
+                    
+                    UART_printf("Day:%d Month:%d Year:%d\r\n", getRTCDay(), getRTCMonth(), getRTCYear());
+                    
+                    scandal_send_timesync(CRITICAL_PRIORITY, scandal_get_addr(), timestamp);
+                    
+                    scandal_set_realtime(timestamp);
+                    
+                    scandal_send_channel(CRITICAL_PRIORITY, GPSBAROMETER_SPEED, cur_speed.speed * 1000);
+                    scandal_send_channel(CRITICAL_PRIORITY, GPSBAROMETER_MILLISECONDS_TODAY, cur_speed.time);
+                    scandal_send_channel(CRITICAL_PRIORITY, GPSBAROMETER_DAYS_SINCE_EPOCH, cur_speed.date);
+                    
 					/* This is an evil hack to make sure that we get fairly consistent timestamps 
 					Sometimes there seems to be a really long dela of ~0.3s on some timestamp
 					messages. To get rid of this, we don't accept any time differences that are 
 					more than 20ms later than we expect them to be. 
 					This is pure evil, and the problem should really be fixed rather than 
 					hacking around it like this */
-					if(last_timesync_time == 0)
+					/*
+                    if(last_timesync_time == 0)
 						last_timesync_time = sc_get_timer();
 
 					timediff = (sc_get_timer() - last_timesync_time) % 1000;
-
 					if((timediff < 50) || (timediff > 600)) {
+                        
 						last_timesync_time = sc_get_timer();
 						scandal_send_timesync(CRITICAL_PRIORITY, scandal_get_addr(), timestamp);
 					}
@@ -368,8 +397,8 @@ int main(void) {
 					scandal_send_channel(CRITICAL_PRIORITY, GPSBAROMETER_SPEED, cur_speed.speed * 1000);
 					scandal_send_channel(CRITICAL_PRIORITY, GPSBAROMETER_MILLISECONDS_TODAY, cur_speed.time);
 					scandal_send_channel(CRITICAL_PRIORITY, GPSBAROMETER_DAYS_SINCE_EPOCH, cur_speed.date);
-
-					/*                    if(cur_point_stamp != 0){
+                    */
+					/*                    if(cur_point_stamp  != 0){
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_TIME,
 													cur_point.time, cur_point_stamp);
 					scandal_send_channel_with_timestamp(CRITICAL_PRIORITY, GPSBAROMETER_LATITUDE,
@@ -413,3 +442,4 @@ int main(void) {
 #endif
 	}
 }
+
